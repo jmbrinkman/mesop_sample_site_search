@@ -13,7 +13,7 @@
     - 'deploy'
     - 'who-assistant'
     - '--image'
-    - ' europe-west4-docker.pkg.dev/$PROJECT_ID/cloud-run/mesop_sample_site_search:$COMMIT_SHA'
+    - 'europe-west4-docker.pkg.dev/$PROJECT_ID/cloud-run/mesop_sample_site_search:$COMMIT_SHA'
     - '--region'
     - 'europe-west4'
     - '--allow-unauthenticated'
