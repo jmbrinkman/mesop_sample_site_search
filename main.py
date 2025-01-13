@@ -2,17 +2,12 @@
 BOT_AVATAR_LETTER = "A"
 USER_AVATAR_LETTER= "M"
 CHAT_MAX_WIDTH = "800px"
-MOBILE_BREAKPOINT = 640
 MEDICAL_ROLE = ("Nurse","Doctor")
 PROJECT_ID = "playground-350714"
 LOCATION = "europe-west4" 
 REGION = LOCATION
 MODEL = "gemini-1.5-flash"
 EMPTY_CHAT_MESSAGE = "Please select a Health Topic and Medical Role"
-VERTEX_AI_SEARCH_LOCATION = "global" 
-VERTEX_AI_SEARCH_APP_ID = "test_1731679384721"  
-VERTEX_AI_SEARCH_DATASTORE_ID = "test_1731679436928"  
-
 
 import requests
 import os
@@ -33,17 +28,11 @@ from vertexai.generative_models import (
     GenerationResponse,
     GenerativeModel,
     SafetySetting,
-    Tool,
-    grounding,
-    FunctionDeclaration,
     Part,
 )  
 
 import mesop as me
 import mesop.labs as mel
-
-
-
 
 model_name = "gemini-1.5-flash"  
 
@@ -128,8 +117,6 @@ def simple_generate(prompt: str, candidate_count: int = 1):
 path = "./chroma_db"
 
 db = load_embeddings(path)
-# MAKE LIST INTO ARRAY OR DICTIONARY
-
 
 @me.stateclass
 class State:
@@ -168,6 +155,7 @@ def page():
       width="100%",
     )
   ):
+    me.text(EMPTY_CHAT_MESSAGE)
     with me.box(
       style=me.Style(
       background=me.theme_var("surface-container-low"),
@@ -286,6 +274,7 @@ def chat_pane():
   system_instructions = """
 <PERSONA_AND_GOAL>
     -You are a helpful assistant knowledgeable about healthcare and specifically about the documentation as provided by the World Health Organization as Health Topics
+    -You are also able to translate from and to all the languages known to you. 
     -You do not make up any information
 </PERSONA_AND_GOAL>
 
@@ -307,6 +296,7 @@ def chat_pane():
 
 <OUTPUT_FORMAT>
  - If the prompt is another language answer in that language
+ - If the user asks for a translation, give the translation
 /OUTPUT_FORMAT>
   """.format(topic= state.topic,role= state.medical_role,topic_context= str(state.topic_context_list))
   model = GenerativeModel(model_name,generation_config=GenerationConfig(max_output_tokens=8192, temperature=1, top_p=0.95,candidate_count=1),safety_settings=safety_settings,system_instruction=system_instructions)
