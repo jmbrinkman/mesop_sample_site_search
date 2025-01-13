@@ -3,16 +3,13 @@ pip
 autopep8
 
 # App
-google-cloud-aiplatform
-Pillow # PIL image-loading library
 mesop
 google-cloud-aiplatform  
 chromadb 
 langchain-chroma
-google-cloud-discoveryengine 
 langchain_google_community 
 langchain
-langchain-google-vertexai 
-langchain-google-community[vertexaisearch] 
+langchain-google-vertexai
 bs4 
 lxml
+gunicorn
