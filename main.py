@@ -3,7 +3,7 @@ BOT_AVATAR_LETTER = "A"
 USER_AVATAR_LETTER= "M"
 CHAT_MAX_WIDTH = "800px"
 MEDICAL_ROLE = ("Nurse","Doctor")
-PROJECT_ID = "playground-350714"
+PROJECT_ID = "development-411716"
 LOCATION = "europe-west4" 
 REGION = LOCATION
 MODEL = "gemini-1.5-flash"
@@ -155,7 +155,6 @@ def page():
       width="100%",
     )
   ):
-    me.text(EMPTY_CHAT_MESSAGE)
     with me.box(
       style=me.Style(
       background=me.theme_var("surface-container-low"),
@@ -165,6 +164,7 @@ def page():
       width="100%",
       )
     ):
+      me.text(EMPTY_CHAT_MESSAGE)
       topic_selector_box()
       role_selector_box()
       if state.topic and state.medical_role:
