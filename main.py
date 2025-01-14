@@ -264,7 +264,8 @@ def overview_box():
     style=me.Style(
       display= "flex",
       flex_basis= "auto",
-      width="100%"
+      width="100%",
+      overflow_y="auto",
     ),
     mode="sanitized"
   )
@@ -333,7 +334,7 @@ def user_message(text):
     style=me.Style(
       display="flex",
       gap=15,
-      justify_content="end",
+      justify_content="start",
       margin=me.Margin.all(20),
     )
   ):
