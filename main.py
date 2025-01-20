@@ -90,7 +90,7 @@ def load_embeddings(path):
                 document = loader.load()
                 document[0].metadata['html'] = ""
                 document[0].metadata['type'] = "factsheet"
-                data= data + document
+                data= data + document   
         db = Chroma.from_documents(documents=data, embedding=embeddings,persist_directory=path)
         return db
     else:
@@ -118,6 +118,19 @@ path = "./chroma_db"
 
 db = load_embeddings(path)
 
+indicator_links = []
+url = "https://www.who.int/data/gho/data/indicators/indicators-index"
+headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
+request = requests.get(url,headers=headers)
+ul = SoupStrainer('div', attrs={"class": "alphabetical-list"})
+soup = BeautifulSoup(request.text, 'lxml',parse_only=ul)
+for item in soup.find_all('li'):
+    links = item.find_all('a')
+    for link in links:
+        link = link["href"]
+        indicator_links.append(link)
+indicator_links_string = str(indicator_links)
+
 @me.stateclass
 class State:
   input: str
@@ -131,6 +144,7 @@ class State:
   output: str
   context: str
   topic_html: str
+  indicators: str
 
 def on_load(e: me.LoadEvent):
   me.set_theme_mode("dark")
@@ -188,12 +202,30 @@ def page():
         style=me.Style(
         background=me.theme_var("surface-container-low"),
         display="flex",
-        flex_direction="column",
+        flex_direction="row",
         height="100%",
-        width="100%",
+        width="30%",
         )
       ):
-        me.text("Placeholder")
+        indicatior_pane()
+        
+def indicatior_pane():
+  state = me.state(State)
+  src = "https://google.github.io/mesop/"
+  me.text("Embedding: " + src, style=me.Style(padding=me.Padding.all(15)))
+  me.embed(
+    src=src,
+    style=me.Style(
+    background=me.theme_var("surface-container-low"),
+    display="flex",
+    flex_direction="column",
+    height="100%",
+    width="100%",
+    )
+  )
+    
+
+
 
 def topic_selector_box():
   state = me.state(State)
@@ -239,7 +271,7 @@ def role_selector_box():
 def example_selector_box():
   state = me.state(State)
   options = []
-  queries = simple_generate(f"create short one sentence LLM queriy on {state.topic} using {state.topic_context_list} specificially for someone with {state.medical_role}",3)
+  queries = simple_generate(f"create short one sentence LLM query on {state.topic} using {state.topic_context_list} specificially for someone with {state.medical_role}",3)
   for query in queries:
     option = me.SelectOption(label=query.text.strip(), value=query.text.strip())
     options.append(option)
@@ -302,6 +334,7 @@ def chat_pane():
   """.format(topic= state.topic,role= state.medical_role,topic_context= str(state.topic_context_list))
   model = GenerativeModel(model_name,generation_config=GenerationConfig(max_output_tokens=8192, temperature=1, top_p=0.95,candidate_count=1),safety_settings=safety_settings,system_instruction=system_instructions)
   chat_session = model.start_chat()
+  # function 
   if state.output:
     chat_session.send_message(state.output,stream=False)
     state.output = ""
@@ -334,7 +367,7 @@ def user_message(text):
     style=me.Style(
       display="flex",
       gap=15,
-      justify_content="start",
+      justify_content="end",
       margin=me.Margin.all(20),
     )
   ):
@@ -469,6 +502,8 @@ def on_selection_change_topic(e: me.SelectSelectionChangeEvent):
      state.topic_html = result.metadata["html"]
     topic_context_list.append(result.page_content)
   state.topic_context_list =  topic_context_list
+  #indicators = simple_generate(f"List all the following links :\n\n{indicator_links_string} that semantically relate to the {state.topic} Only give the URL! Example: Topic: buruli-ulcer Url: https://www.who.int/data/gho/data/indicators/indicator-details/GHO/buruli-ulcer ",1)
+  state.indicators = indicator_links_string
   state.example_query = ""
 
 def on_selection_change_role(e: me.SelectSelectionChangeEvent):
