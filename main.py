@@ -2,12 +2,10 @@
 BOT_AVATAR_LETTER = "A"
 USER_AVATAR_LETTER= "M"
 CHAT_MAX_WIDTH = "800px"
-MEDICAL_ROLE = ("Nurse","Doctor")
 PROJECT_ID = "development-411716"
 LOCATION = "europe-west4" 
 REGION = LOCATION
 MODEL = "gemini-1.5-flash"
-EMPTY_CHAT_MESSAGE = "Please select a Health Topic and Medical Role"
 
 import requests
 import os
@@ -19,8 +17,9 @@ import base64
 
 from bs4 import BeautifulSoup, SoupStrainer
 
+from langchain_community.document_loaders import RecursiveUrlLoader
+
 from langchain_google_vertexai import VertexAIEmbeddings
-from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.vectorstores import Chroma
 import vertexai
 from vertexai.generative_models import (
@@ -55,47 +54,41 @@ safety_settings = [
     ),
 ]
 
+def bs4_extractor(html: str) -> str:
+    soup = BeautifulSoup(html, "lxml")
+    return re.sub(r"\n\n+", "\n\n", soup.text).strip()
+
+path = "/mnt/chroma/chroma"
+
+loader = RecursiveUrlLoader(
+"https://cloud.google.com/architecture/",
+max_depth=10,
+use_async=False,
+extractor=bs4_extractor,
+# metadata_extractor=None,
+# exclude_dirs=(),
+# timeout=10,
+# check_response_status=True,
+continue_on_failure=True,
+# prevent_outside=True,
+# base_url=None,
+# ...
+)
+
+
 def load_embeddings(path):
     vertexai.init(project=PROJECT_ID, location=LOCATION)
     embeddings = VertexAIEmbeddings(model_name="text-embedding-004")
     if not os.path.exists(path):
-        data = []
-        url = "https://www.who.int/health-topics"
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
-        request = requests.get(url,headers=headers)
-        section = SoupStrainer('section')
-        soup = BeautifulSoup(request.text, 'lxml',parse_only=section)
-        for item in soup.find_all('div', class_='list-view--item'):
-            link = item.find('a')['href']
-            request = requests.get(link,headers=headers)
-            html = BeautifulSoup(request.text,'lxml',parse_only=section).find("div", class_="dynamic-content__section-content")
-            loader = WebBaseLoader(link, bs_get_text_kwargs={"separator": " ", "strip": True})
-            loader.default_parser = "lxml"
-            document = loader.load()
-            document[0].metadata['html'] = str(html)
-            document[0].metadata['type'] = "topic"
-            data= data + document
-        url = "https://www.who.int/news-room/fact-sheets"
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
-        request = requests.get(url,headers=headers)
-        ul = SoupStrainer('ul')
-        soup = BeautifulSoup(request.text, 'lxml',parse_only=ul)
-        for item in soup('li', class_='alphabetical-nav--list-item'):
-            links = item.find_all('a')
-            for link in links:
-                link = link["href"]
-                full_link=f"https://www.who.int{link}"
-                loader = WebBaseLoader(full_link, bs_get_text_kwargs={"separator": " ", "strip": True})
-                loader.default_parser = "lxml"
-                document = loader.load()
-                document[0].metadata['html'] = ""
-                document[0].metadata['type'] = "factsheet"
-                data= data + document   
-        db = Chroma.from_documents(documents=data, embedding=embeddings,persist_directory=path)
-        return db
+      data=loader.load()
+      db = Chroma.from_documents(documents=data, embedding=embeddings,persist_directory=path)
+      return db
     else:
-        db = Chroma(persist_directory=path,embedding_function=embeddings)
-        return db
+      db = Chroma(persist_directory=path,embedding_function=embeddings)
+      return db
+
+db = load_embeddings(path)
+
 
 def search_vectordb(db: object, query: str, k: int) -> list:
     search_kwargs = {"k": k}
@@ -103,58 +96,26 @@ def search_vectordb(db: object, query: str, k: int) -> list:
     results = retriever.invoke(query)
     return results
 
-def simple_generate(prompt: str, candidate_count: int = 1):
-    model = GenerativeModel(model_name)
-    generation_config = GenerationConfig(max_output_tokens=8192, temperature=0.8, top_p=0.95,candidate_count=candidate_count)
-    responses = model.generate_content(
-      [prompt],
-      generation_config=generation_config,
-      safety_settings=safety_settings,
-      stream=False,
-    )
-    return responses.candidates
-
-path = "./chroma_db"
-
-db = load_embeddings(path)
-
-indicator_links = []
-url = "https://www.who.int/data/gho/data/indicators/indicators-index"
-headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
-request = requests.get(url,headers=headers)
-ul = SoupStrainer('div', attrs={"class": "alphabetical-list"})
-soup = BeautifulSoup(request.text, 'lxml',parse_only=ul)
-for item in soup.find_all('li'):
-    links = item.find_all('a')
-    for link in links:
-        link = link["href"]
-        indicator_links.append(link)
-indicator_links_string = str(indicator_links)
-
 @me.stateclass
 class State:
   input: str
   topic: str 
-  medical_role: str 
   in_progress: bool
-  topic_context_list: list[str]
   example_queries: list[str]
   example_query: str
-  session : bool
   output: str
-  context: str
-  topic_html: str
-  indicators: str
+  context: list[str]
+  debug: str
 
 def on_load(e: me.LoadEvent):
-  me.set_theme_mode("dark")
+  me.set_theme_mode("system")
 
 
 @me.page(
   security_policy=me.SecurityPolicy(
    allowed_iframe_parents=["https://google.github.io"]
   ),
-  title="WHO Assistant",
+  title="ITS A DISASTER!",
   path="/",
   on_load=on_load,
 )
@@ -178,165 +139,31 @@ def page():
       width="100%",
       )
     ):
-      me.text(EMPTY_CHAT_MESSAGE)
-      topic_selector_box()
-      role_selector_box()
-      if state.topic and state.medical_role:
-        example_selector_box()
-        overview_box()
-    if state.example_query:
-      with me.box(
-        style=me.Style(
-        background=me.theme_var("surface-container-low"),
-        display="flex",
-        flex_direction="column",
-        height="100%",
-        width="100%",
-        justify_items= "end"
-        )
-      ):
-        if state.example_query:
-          chat_pane()
-          chat_input()
-      with me.box(
-        style=me.Style(
-        background=me.theme_var("surface-container-low"),
-        display="flex",
-        flex_direction="row",
-        height="100%",
-        width="30%",
-        )
-      ):
-        indicatior_pane()
-        
-def indicatior_pane():
-  state = me.state(State)
-  src = "https://google.github.io/mesop/"
-  me.text("Embedding: " + src, style=me.Style(padding=me.Padding.all(15)))
-  me.embed(
-    src=src,
-    style=me.Style(
-    background=me.theme_var("surface-container-low"),
-    display="flex",
-    flex_direction="column",
-    height="100%",
-    width="100%",
-    )
-  )
-    
+      chat_pane()
+      chat_input()
 
-
-
-def topic_selector_box():
-  state = me.state(State)
-  options = []
-  topics = []
-  for item in db.get()["metadatas"]:
-    if item["type"] == "topic":
-      topic_title = item["title"].strip()
-      topics.append(topic_title)
-      option = me.SelectOption(label=topic_title, value=topic_title)
-      options.append(option)
-  me.select(
-    label="Health Topic",
-    options=options,
-    on_selection_change=on_selection_change_topic,
-    style=me.Style(
-      display= "flex",
-      flex_basis= "auto",
-      width="100%"
-    ),
-    multiple=False,
-    appearance="fill",
-    value=state.topic,
-    )                                                                                       
-  
-def role_selector_box():
-  state = me.state(State)
-  me.select(
-    label="Role",
-    options = [me.SelectOption(label=MEDICAL_ROLE[0], value=MEDICAL_ROLE[0]),
-            me.SelectOption(label=MEDICAL_ROLE[1], value=MEDICAL_ROLE[1])],
-    on_selection_change=on_selection_change_role,
-    style=me.Style(
-      display= "flex",
-      flex_basis= "auto",
-      width="100%"
-    ),
-      multiple=False,
-      appearance="outline",
-      value=state.medical_role,
-    )
-    
-def example_selector_box():
-  state = me.state(State)
-  options = []
-  queries = simple_generate(f"create short one sentence LLM query on {state.topic} using {state.topic_context_list} specificially for someone with {state.medical_role}",3)
-  for query in queries:
-    option = me.SelectOption(label=query.text.strip(), value=query.text.strip())
-    options.append(option)
-  me.select(
-    label="Example Queries",
-    options=options,
-    on_selection_change=on_selection_change_example,
-    style=me.Style(
-    display= "flex",
-    flex_basis= "auto",
-    width="100%"
-    ),
-    multiple=False,
-    appearance="outline",
-    value=state.example_query,
-    )
-  
-def overview_box():
-  state = me.state(State)
-  me.html(
-    html = state.topic_html,
-    style=me.Style(
-      display= "flex",
-      flex_basis= "auto",
-      width="100%",
-      overflow_y="auto",
-    ),
-    mode="sanitized"
-  )
   
 def chat_pane():
   state = me.state(State)
-  system_instructions = """
-<PERSONA_AND_GOAL>
-    -You are a helpful assistant knowledgeable about healthcare and specifically about the documentation as provided by the World Health Organization as Health Topics
-    -You are also able to translate from and to all the languages known to you. 
-    -You do not make up any information
-</PERSONA_AND_GOAL>
-
-<INSTRUCTIONS>
-    - The prompt will have a question about {topic} by a {role}
-    - Use the the <CONTEXT> to answer the question and if you cannot say "There is no such information withing the WHO Health Topics"
-    - Always mention the source of the article as a full url but mention each url only once
-    - Use the chat history to determine if the user wants information on a sub-topic. 
-<INSTRUCTIONS>
-
-<CONTEXT>
-{topic_context}
-</CONTEXT>
-
-<CONSTRAINTS>
-    - You cannot make up information
-    - You cannot answer non healthcare related questions
-</CONSTRAINTS>
-
-<OUTPUT_FORMAT>
- - If the prompt is another language answer in that language
- - If the user asks for a translation, give the translation
-/OUTPUT_FORMAT>
-  """.format(topic= state.topic,role= state.medical_role,topic_context= str(state.topic_context_list))
-  model = GenerativeModel(model_name,generation_config=GenerationConfig(max_output_tokens=8192, temperature=1, top_p=0.95,candidate_count=1),safety_settings=safety_settings,system_instruction=system_instructions)
+  context = search_vectordb(db,"Disaster Recover, High Availability, Ransomware, Reliability, DR Plan, DR Test, Backup, Restore, DR",15)
+  docs = []
+  state.context = docs
+  for doc in context:
+    content= doc.page_content
+    docs.append(content)
+  system_instructions =  f"""Answer the question with the given context. You are a Solutions Architect specilizaed in Google Cloud.
+  If the information is not available in the context say that the Google Cloud Architecture Center provides no guidance but answer the query anyway
+  Alwasy give the soure URl! Do not make up information.
+  This is the 'context': {docs}
+  Example: "What is disaster recovery?" 
+  Context: "Service-interrupting events can happen at any time. Your network could have an outage, your latest application push might introduce a critical bug, or you might have to contend with a natural disaster. When things go awry, it's important to have a robust, targeted, and well-tested DR plan."
+  Answer: "Diaster recovery is the recovery of your service due to an outage, like a network outage, your application that pushed a critical bug. For more information see https://cloud.google.com/architecture/dr-scenarios-planning-guide
+  """
+  model = GenerativeModel(model_name,generation_config=GenerationConfig(max_output_tokens=8192, temperature=0.85, top_p=0.95,candidate_count=1),safety_settings=safety_settings,system_instruction=system_instructions)
   chat_session = model.start_chat()
-  # function 
   if state.output:
-    chat_session.send_message(state.output,stream=False)
+    full_input = state.output
+    chat_session.send_message(full_input,stream=False)
     state.output = ""
   with me.box(
     style=me.Style(
@@ -367,7 +194,7 @@ def user_message(text):
     style=me.Style(
       display="flex",
       gap=15,
-      justify_content="end",
+      justify_content="start",
       margin=me.Margin.all(20),
     )
   ):
@@ -490,34 +317,6 @@ def icon_button(
     ):
       me.icon(icon)
 
-
-# Event Handlers
-def on_selection_change_topic(e: me.SelectSelectionChangeEvent):
-  state = me.state(State)
-  state.topic = e.value
-  topic_context_list = []
-  topic_context =  search_vectordb(db,state.topic,5)
-  for result in topic_context:
-    if str(result.metadata["title"]).strip() == state.topic and result.metadata["type"] == "topic":
-     state.topic_html = result.metadata["html"]
-    topic_context_list.append(result.page_content)
-  state.topic_context_list =  topic_context_list
-  #indicators = simple_generate(f"List all the following links :\n\n{indicator_links_string} that semantically relate to the {state.topic} Only give the URL! Example: Topic: buruli-ulcer Url: https://www.who.int/data/gho/data/indicators/indicator-details/GHO/buruli-ulcer ",1)
-  state.indicators = indicator_links_string
-  state.example_query = ""
-
-def on_selection_change_role(e: me.SelectSelectionChangeEvent):
-  state = me.state(State)
-  state.medical_role = e.value
-  medical_role =  state.medical_role
-  state.example_query = ""
-
-def on_selection_change_example(e: me.SelectSelectionChangeEvent):
-  state = me.state(State)
-  state.example_query  = e.value
-  state.input = state.example_query
-  me.focus_component(key="chat_input")
-
 def on_chat_input(e: me.InputBlurEvent):
   """Capture chat text input on blur."""
   state = me.state(State)
@@ -529,7 +328,6 @@ def on_submit_chat_msg(e: me.TextareaShortcutEvent):
   yield
   yield from _submit_chat_msg()
 
-
 def on_click_submit_chat_msg(e: me.ClickEvent):
   yield from _submit_chat_msg()
 
@@ -539,17 +337,15 @@ def _submit_chat_msg():
   if state.in_progress or not state.input:
     return
   input = state.input
+
+
+  
   # Clear the text input.
   state.input = ""
   yield
 
   start_time = time.time()
-  context = search_vectordb(db,input,1)
-  state.context = context[0].page_content
-  #full_input = f"{input}\n\n\{context[0].page_content}"
-  full_input = f"{input}"
-  output= full_input
-  state.output = output
+  state.output = input
   state.in_progress = False
   me.focus_component(key="chat_input")
   yield
