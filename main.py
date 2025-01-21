@@ -207,23 +207,7 @@ def page():
         width="30%",
         )
       ):
-        indicatior_pane()
-        
-def indicatior_pane():
-  state = me.state(State)
-  src = "https://google.github.io/mesop/"
-  me.text("Embedding: " + src, style=me.Style(padding=me.Padding.all(15)))
-  me.embed(
-    src=src,
-    style=me.Style(
-    background=me.theme_var("surface-container-low"),
-    display="flex",
-    flex_direction="column",
-    height="100%",
-    width="100%",
-    )
-  )
-    
+        me.text("Placeholder")
 
 
 
