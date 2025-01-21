@@ -58,36 +58,8 @@ def bs4_extractor(html: str) -> str:
     soup = BeautifulSoup(html, "lxml")
     return re.sub(r"\n\n+", "\n\n", soup.text).strip()
 
-path = "/chroma/chroma"
 
-loader = RecursiveUrlLoader(
-"https://cloud.google.com/architecture/",
-max_depth=10,
-use_async=False,
-extractor=bs4_extractor,
-# metadata_extractor=None,
-# exclude_dirs=(),
-# timeout=10,
-# check_response_status=True,
-continue_on_failure=True,
-# prevent_outside=True,
-# base_url=None,
-# ...
-)
-
-
-def load_embeddings(path):
-    vertexai.init(project=PROJECT_ID, location=LOCATION)
-    embeddings = VertexAIEmbeddings(model_name="text-embedding-004")
-    if not os.path.exists(path):
-      data=loader.load()
-      db = Chroma.from_documents(documents=data, embedding=embeddings,persist_directory=path)
-      return db
-    else:
-      db = Chroma(persist_directory=path,embedding_function=embeddings)
-      return db
-
-db = load_embeddings(path)
+db = Chroma(persist_directory="/chroma/chroma",embedding_function=embeddings)
 
 
 def search_vectordb(db: object, query: str, k: int) -> list:
