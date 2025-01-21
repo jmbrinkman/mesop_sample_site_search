@@ -118,7 +118,6 @@ def chat_pane():
   state = me.state(State)
   context = search_vectordb(db,"Disaster Recover, High Availability, Ransomware, Reliability, DR Plan, DR Test, Backup, Restore, DR",15)
   docs = []
-  state.context = docs
   for doc in context:
     content= doc.page_content
     docs.append(content)
