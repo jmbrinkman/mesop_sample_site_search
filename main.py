@@ -58,7 +58,7 @@ def bs4_extractor(html: str) -> str:
     soup = BeautifulSoup(html, "lxml")
     return re.sub(r"\n\n+", "\n\n", soup.text).strip()
 
-path = "/mnt/chroma/chroma"
+path = "/chroma/chroma"
 
 loader = RecursiveUrlLoader(
 "https://cloud.google.com/architecture/",
