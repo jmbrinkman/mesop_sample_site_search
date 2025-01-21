@@ -54,10 +54,9 @@ safety_settings = [
     ),
 ]
 
-def bs4_extractor(html: str) -> str:
-    soup = BeautifulSoup(html, "lxml")
-    return re.sub(r"\n\n+", "\n\n", soup.text).strip()
 
+vertexai.init(project=PROJECT_ID, location=LOCATION)
+embeddings = VertexAIEmbeddings(model_name="text-embedding-004")
 
 db = Chroma(persist_directory="/chroma/chroma",embedding_function=embeddings)
 
