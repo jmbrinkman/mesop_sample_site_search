@@ -55,47 +55,14 @@ safety_settings = [
     ),
 ]
 
-def load_embeddings(path):
-    vertexai.init(project=PROJECT_ID, location=LOCATION)
-    embeddings = VertexAIEmbeddings(model_name="text-embedding-004")
-    if not os.path.exists(path):
-        data = []
-        url = "https://www.who.int/health-topics"
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
-        request = requests.get(url,headers=headers)
-        section = SoupStrainer('section')
-        soup = BeautifulSoup(request.text, 'lxml',parse_only=section)
-        for item in soup.find_all('div', class_='list-view--item'):
-            link = item.find('a')['href']
-            request = requests.get(link,headers=headers)
-            html = BeautifulSoup(request.text,'lxml',parse_only=section).find("div", class_="dynamic-content__section-content")
-            loader = WebBaseLoader(link, bs_get_text_kwargs={"separator": " ", "strip": True})
-            loader.default_parser = "lxml"
-            document = loader.load()
-            document[0].metadata['html'] = str(html)
-            document[0].metadata['type'] = "topic"
-            data= data + document
-        url = "https://www.who.int/news-room/fact-sheets"
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
-        request = requests.get(url,headers=headers)
-        ul = SoupStrainer('ul')
-        soup = BeautifulSoup(request.text, 'lxml',parse_only=ul)
-        for item in soup('li', class_='alphabetical-nav--list-item'):
-            links = item.find_all('a')
-            for link in links:
-                link = link["href"]
-                full_link=f"https://www.who.int{link}"
-                loader = WebBaseLoader(full_link, bs_get_text_kwargs={"separator": " ", "strip": True})
-                loader.default_parser = "lxml"
-                document = loader.load()
-                document[0].metadata['html'] = ""
-                document[0].metadata['type'] = "factsheet"
-                data= data + document   
-        db = Chroma.from_documents(documents=data, embedding=embeddings,persist_directory=path)
-        return db
-    else:
-        db = Chroma(persist_directory=path,embedding_function=embeddings)
-        return db
+# We assume here a GCS path fill be used for an existing chrome database, created and updated by a cloud function. Possibly we can also replace this with Vector Search Grounding at some point. It is mounted under /chroma_db
+
+path = "./chroma_db"
+
+db = load_embeddings(path)
+
+
+db = Chroma(persist_directory=path,embedding_function=embeddings)
 
 def search_vectordb(db: object, query: str, k: int) -> list:
     search_kwargs = {"k": k}
@@ -114,9 +81,7 @@ def simple_generate(prompt: str, candidate_count: int = 1):
     )
     return responses.candidates
 
-path = "./chroma_db"
 
-db = load_embeddings(path)
 
 indicator_links = []
 url = "https://www.who.int/data/gho/data/indicators/indicators-index"
