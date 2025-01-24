@@ -1,14 +1,20 @@
 
+# I'm not getting into the discsusion about variabeles or constants. I'm changing this into variabeles and because in mesop anything outside of the pager is global I'll treat them as constants anyway
 BOT_AVATAR_LETTER = "A"
 USER_AVATAR_LETTER= "M"
 CHAT_MAX_WIDTH = "800px"
 MEDICAL_ROLE = ("Nurse","Doctor")
+# ENV variables, or maybe my fancy meta-data request to get the next two variabeles
 PROJECT_ID = "development-411716"
 LOCATION = "europe-west4" 
 REGION = LOCATION
+# Keeping till I replace all the occurences
 MODEL = "gemini-1.5-flash"
+# This should be named heading and say something about the app
 EMPTY_CHAT_MESSAGE = "Please select a Health Topic and Medical Role"
 
+
+# Prune we once we are done
 import requests
 import os
 import random
@@ -34,8 +40,10 @@ from vertexai.generative_models import (
 import mesop as me
 import mesop.labs as mel
 
+# Could make model selector. But we are not trying to make this into AIStuido
 model_name = "gemini-1.5-flash"  
 
+# Convert to ENV Variabeles and mount load them properly in the Cloud Run -> To Do
 safety_settings = [
     SafetySetting(
         category=SafetySetting.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
@@ -58,10 +66,8 @@ safety_settings = [
 # We assume here a GCS path fill be used for an existing chrome database, created and updated by a cloud function. Possibly we can also replace this with Vector Search Grounding at some point. It is mounted under /chroma_db
 
 path = "./chroma_db"
-
-db = load_embeddings(path)
-
-
+vertexai.init(project=PROJECT_ID, location=LOCATION)
+embeddings = VertexAIEmbeddings(model_name="text-embedding-004")    
 db = Chroma(persist_directory=path,embedding_function=embeddings)
 
 def search_vectordb(db: object, query: str, k: int) -> list:
@@ -81,21 +87,7 @@ def simple_generate(prompt: str, candidate_count: int = 1):
     )
     return responses.candidates
 
-
-
-indicator_links = []
-url = "https://www.who.int/data/gho/data/indicators/indicators-index"
-headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
-request = requests.get(url,headers=headers)
-ul = SoupStrainer('div', attrs={"class": "alphabetical-list"})
-soup = BeautifulSoup(request.text, 'lxml',parse_only=ul)
-for item in soup.find_all('li'):
-    links = item.find_all('a')
-    for link in links:
-        link = link["href"]
-        indicator_links.append(link)
-indicator_links_string = str(indicator_links)
-
+# if the state becomes to ge the application is to slow. And all sorts of bad stuff happens if you use complicated datastructures.
 @me.stateclass
 class State:
   input: str
@@ -114,7 +106,7 @@ class State:
 def on_load(e: me.LoadEvent):
   me.set_theme_mode("dark")
 
-
+# Policy to add embedded iframes(meh) and setting the title. Should be a variable. 
 @me.page(
   security_policy=me.SecurityPolicy(
    allowed_iframe_parents=["https://google.github.io"]
@@ -143,13 +135,7 @@ def page():
       width="100%",
       )
     ):
-      me.text(EMPTY_CHAT_MESSAGE)
-      topic_selector_box()
-      role_selector_box()
-      if state.topic and state.medical_role:
-        example_selector_box()
-        overview_box()
-    if state.example_query:
+      me.text("Placeholder")
       with me.box(
         style=me.Style(
         background=me.theme_var("surface-container-low"),
@@ -160,9 +146,7 @@ def page():
         justify_items= "end"
         )
       ):
-        if state.example_query:
-          chat_pane()
-          chat_input()
+        me.text("Placeholder")
       with me.box(
         style=me.Style(
         background=me.theme_var("surface-container-low"),
@@ -175,7 +159,7 @@ def page():
         me.text("Placeholder")
 
 
-
+# Example to selector from a list with external data
 def topic_selector_box():
   state = me.state(State)
   options = []
@@ -199,7 +183,9 @@ def topic_selector_box():
     appearance="fill",
     value=state.topic,
     )                                                                                       
-  
+
+# Example to selector from a list with internal data
+
 def role_selector_box():
   state = me.state(State)
   me.select(
@@ -216,7 +202,9 @@ def role_selector_box():
       appearance="outline",
       value=state.medical_role,
     )
-    
+  
+# Example to let Gemini make queries for you based on the topic
+
 def example_selector_box():
   state = me.state(State)
   options = []
@@ -237,7 +225,9 @@ def example_selector_box():
     appearance="outline",
     value=state.example_query,
     )
-  
+
+ # Box on the left to show a summaryy
+
 def overview_box():
   state = me.state(State)
   me.html(
@@ -250,7 +240,9 @@ def overview_box():
     ),
     mode="sanitized"
   )
-  
+
+ # This needs work. I like the idea of system instructions a chat sessions (over sending generates back and forth). Maybe doesn't even belong in the coee, but should be a parameter.
+
 def chat_pane():
   state = me.state(State)
   system_instructions = """
@@ -283,7 +275,7 @@ def chat_pane():
   """.format(topic= state.topic,role= state.medical_role,topic_context= str(state.topic_context_list))
   model = GenerativeModel(model_name,generation_config=GenerationConfig(max_output_tokens=8192, temperature=1, top_p=0.95,candidate_count=1),safety_settings=safety_settings,system_instruction=system_instructions)
   chat_session = model.start_chat()
-  # function 
+  # This works put not pretty yet
   if state.output:
     chat_session.send_message(state.output,stream=False)
     state.output = ""
@@ -310,7 +302,9 @@ def chat_pane():
     #if state.in_progress:
       #with me.box(key="scroll-to", style=me.Style(height=250)):
       #  pass
-    
+
+#all sorts of function living inside main. Maybe also move them to the bottom, or a module?
+
 def user_message(text):
   with me.box(
     style=me.Style(
@@ -440,7 +434,7 @@ def icon_button(
       me.icon(icon)
 
 
-# Event Handlers
+# Event Handlers - I needeed to hack this so much it made me cry a little
 def on_selection_change_topic(e: me.SelectSelectionChangeEvent):
   state = me.state(State)
   state.topic = e.value
@@ -451,8 +445,6 @@ def on_selection_change_topic(e: me.SelectSelectionChangeEvent):
      state.topic_html = result.metadata["html"]
     topic_context_list.append(result.page_content)
   state.topic_context_list =  topic_context_list
-  #indicators = simple_generate(f"List all the following links :\n\n{indicator_links_string} that semantically relate to the {state.topic} Only give the URL! Example: Topic: buruli-ulcer Url: https://www.who.int/data/gho/data/indicators/indicator-details/GHO/buruli-ulcer ",1)
-  state.indicators = indicator_links_string
   state.example_query = ""
 
 def on_selection_change_role(e: me.SelectSelectionChangeEvent):
@@ -492,6 +484,8 @@ def _submit_chat_msg():
   state.input = ""
   yield
 
+
+# Where doy you add context? Do we? Or use the chat context? Whatevert keeps the langchain chain blobs out as far as I am concercened.
   start_time = time.time()
   context = search_vectordb(db,input,1)
   state.context = context[0].page_content
