@@ -11,7 +11,7 @@
     args:
     - 'run'
     - 'deploy'
-    - 'who-assistant'
+    - 'Hairliner'
     - '--image'
     - 'europe-west4-docker.pkg.dev/$PROJECT_ID/cloud-run/mesop_sample_site_search:$COMMIT_SHA'
     - '--region'

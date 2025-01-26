@@ -2,12 +2,27 @@
 BOT_AVATAR_LETTER = "A"
 USER_AVATAR_LETTER= "M"
 CHAT_MAX_WIDTH = "800px"
-MEDICAL_ROLE = ("Nurse","Doctor")
 PROJECT_ID = "development-411716"
 LOCATION = "europe-west4" 
 REGION = LOCATION
-MODEL = "gemini-1.5-flash"
 EMPTY_CHAT_MESSAGE = "Please select a Health Topic and Medical Role"
+# Set to your data store location
+VERTEX_AI_SEARCH_LOCATION = "eu"  # @param {type:"string"}
+# Set to your search app ID
+VERTEX_AI_SEARCH_APP_ID = "freebird_1737574726005"  # @param {type:"string"}
+# Set to your data store ID
+VERTEX_AI_SEARCH_DATASTORE_ID = "freebird_1737574778860_gcs_store"  # @param {type:"string"}
+
+import requests
+
+project_id= requests.get("http://metadata/computeMetadata/v1/project/project-id", headers={'Metadata-Flavor': 'Google'}).text
+full_zone_string = requests.get("http://metadata/computeMetadata/v1/instance/zone", headers={'Metadata-Flavor': 'Google'}).text
+zone_name = full_zone_string.split("/")[3]
+region = zone_name[:-2]
+
+REGION = region
+PROJECT_ID = project_id
+location = 'us-central1'
 
 import requests
 import os
@@ -17,11 +32,6 @@ from dataclasses import asdict, dataclass
 from typing import Callable, Literal
 import base64
 
-from bs4 import BeautifulSoup, SoupStrainer
-
-from langchain_google_vertexai import VertexAIEmbeddings
-from langchain_community.document_loaders import WebBaseLoader
-from langchain_community.vectorstores import Chroma
 import vertexai
 from vertexai.generative_models import (
     GenerationConfig,
@@ -29,12 +39,27 @@ from vertexai.generative_models import (
     GenerativeModel,
     SafetySetting,
     Part,
+    Tool
 )  
 
 import mesop as me
 import mesop.labs as mel
 
 model_name = "gemini-1.5-flash"  
+
+tools = [
+    Tool.from_retrieval(
+        retrieval=generative_models.grounding.Retrieval(
+            source=generative_models.grounding.VertexAISearch(
+                datastore=VERTEX_AI_SEARCH_DATASTORE_ID,
+                project=PROJECT_ID,
+                location=VERTEX_AI_SEARCH_LOCATION,
+            ),
+            disable_attribution=False,
+        )
+    ),
+]
+
 
 safety_settings = [
     SafetySetting(
@@ -55,92 +80,49 @@ safety_settings = [
     ),
 ]
 
-def load_embeddings(path):
-    vertexai.init(project=PROJECT_ID, location=LOCATION)
-    embeddings = VertexAIEmbeddings(model_name="text-embedding-004")
-    if not os.path.exists(path):
-        data = []
-        url = "https://www.who.int/health-topics"
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
-        request = requests.get(url,headers=headers)
-        section = SoupStrainer('section')
-        soup = BeautifulSoup(request.text, 'lxml',parse_only=section)
-        for item in soup.find_all('div', class_='list-view--item'):
-            link = item.find('a')['href']
-            request = requests.get(link,headers=headers)
-            html = BeautifulSoup(request.text,'lxml',parse_only=section).find("div", class_="dynamic-content__section-content")
-            loader = WebBaseLoader(link, bs_get_text_kwargs={"separator": " ", "strip": True})
-            loader.default_parser = "lxml"
-            document = loader.load()
-            document[0].metadata['html'] = str(html)
-            document[0].metadata['type'] = "topic"
-            data= data + document
-        url = "https://www.who.int/news-room/fact-sheets"
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36'}
-        request = requests.get(url,headers=headers)
-        ul = SoupStrainer('ul')
-        soup = BeautifulSoup(request.text, 'lxml',parse_only=ul)
-        for item in soup('li', class_='alphabetical-nav--list-item'):
-            links = item.find_all('a')
-            for link in links:
-                link = link["href"]
-                full_link=f"https://www.who.int{link}"
-                loader = WebBaseLoader(full_link, bs_get_text_kwargs={"separator": " ", "strip": True})
-                loader.default_parser = "lxml"
-                document = loader.load()
-                document[0].metadata['html'] = ""
-                document[0].metadata['type'] = "factsheet"
-                data= data + document
-        db = Chroma.from_documents(documents=data, embedding=embeddings,persist_directory=path)
-        return db
-    else:
-        db = Chroma(persist_directory=path,embedding_function=embeddings)
-        return db
+vertexai.init(project=PROJECT_ID, location=LOCATION)
+embeddings = VertexAIEmbeddings(model_name="text-embedding-004")
+generation_config = GenerationConfig(max_output_tokens=8192, temperature=0.8, top_p=0.95)
 
-def search_vectordb(db: object, query: str, k: int) -> list:
-    search_kwargs = {"k": k}
-    retriever= db.as_retriever(search_kwargs=search_kwargs)
-    results = retriever.invoke(query)
-    return results
+system_instructions = """
+<PERSONA_AND_GOAL>
+      You are a helpful assistant knowledgeable about PanAm airplanes
+</PERSONA_AND_GOAL>
 
-def simple_generate(prompt: str, candidate_count: int = 1):
-    model = GenerativeModel(model_name)
-    generation_config = GenerationConfig(max_output_tokens=8192, temperature=0.8, top_p=0.95,candidate_count=candidate_count)
-    responses = model.generate_content(
-      [prompt],
-      generation_config=generation_config,
-      safety_settings=safety_settings,
-      stream=False,
-    )
-    return responses.candidates
+<INSTRUCTIONS>
+- Always refer to the tool and Ground your answers in it
+- Understand the retrieved snippet by the tool and only use that information to help users
+- For supporting references, you can provide the Grounding tool snippets verbatim, and any other info like page number
+- For Information not available in the tool, mention you dont have access to the information.
+- Output "answer" should be I dont know when the user question is irrelevant or outside the <CONTEXT>
+- Leave "reference_snippet" as null if you are not sure about the page and text snippet
+<INSTRUCTIONS>
 
-path = "./chroma_db"
+<CONTEXT>
+  Grounding tool finds most relevant snippets from the Pan An operatin manuals data store.
+  Use the information provided by the tool as your knowledge base.
+</CONTEXT>
 
-db = load_embeddings(path)
+<CONSTRAINTS>
+- ONLY use information available from the Grounding tool
+</CONSTRAINTS>
+"""
+
 
 @me.stateclass
 class State:
   input: str
-  topic: str 
-  medical_role: str 
   in_progress: bool
-  topic_context_list: list[str]
-  example_queries: list[str]
-  example_query: str
   session : bool
-  output: str
-  context: str
-  topic_html: str
 
 def on_load(e: me.LoadEvent):
   me.set_theme_mode("dark")
-
 
 @me.page(
   security_policy=me.SecurityPolicy(
    allowed_iframe_parents=["https://google.github.io"]
   ),
-  title="WHO Assistant",
+  title=page_title,
   path="/",
   on_load=on_load,
 )
@@ -164,13 +146,6 @@ def page():
       width="100%",
       )
     ):
-      me.text(EMPTY_CHAT_MESSAGE)
-      topic_selector_box()
-      role_selector_box()
-      if state.topic and state.medical_role:
-        example_selector_box()
-        overview_box()
-    if state.example_query:
       with me.box(
         style=me.Style(
         background=me.theme_var("surface-container-low"),
@@ -181,9 +156,8 @@ def page():
         justify_items= "end"
         )
       ):
-        if state.example_query:
-          chat_pane()
-          chat_input()
+        chat_pane()
+        chat_input()
       with me.box(
         style=me.Style(
         background=me.theme_var("surface-container-low"),
@@ -195,116 +169,14 @@ def page():
       ):
         me.text("Placeholder")
 
-def topic_selector_box():
-  state = me.state(State)
-  options = []
-  topics = []
-  for item in db.get()["metadatas"]:
-    if item["type"] == "topic":
-      topic_title = item["title"].strip()
-      topics.append(topic_title)
-      option = me.SelectOption(label=topic_title, value=topic_title)
-      options.append(option)
-  me.select(
-    label="Health Topic",
-    options=options,
-    on_selection_change=on_selection_change_topic,
-    style=me.Style(
-      display= "flex",
-      flex_basis= "auto",
-      width="100%"
-    ),
-    multiple=False,
-    appearance="fill",
-    value=state.topic,
-    )                                                                                       
-  
-def role_selector_box():
-  state = me.state(State)
-  me.select(
-    label="Role",
-    options = [me.SelectOption(label=MEDICAL_ROLE[0], value=MEDICAL_ROLE[0]),
-            me.SelectOption(label=MEDICAL_ROLE[1], value=MEDICAL_ROLE[1])],
-    on_selection_change=on_selection_change_role,
-    style=me.Style(
-      display= "flex",
-      flex_basis= "auto",
-      width="100%"
-    ),
-      multiple=False,
-      appearance="outline",
-      value=state.medical_role,
-    )
-    
-def example_selector_box():
-  state = me.state(State)
-  options = []
-  queries = simple_generate(f"create short one sentence LLM queriy on {state.topic} using {state.topic_context_list} specificially for someone with {state.medical_role}",3)
-  for query in queries:
-    option = me.SelectOption(label=query.text.strip(), value=query.text.strip())
-    options.append(option)
-  me.select(
-    label="Example Queries",
-    options=options,
-    on_selection_change=on_selection_change_example,
-    style=me.Style(
-    display= "flex",
-    flex_basis= "auto",
-    width="100%"
-    ),
-    multiple=False,
-    appearance="outline",
-    value=state.example_query,
-    )
-  
-def overview_box():
-  state = me.state(State)
-  me.html(
-    html = state.topic_html,
-    style=me.Style(
-      display= "flex",
-      flex_basis= "auto",
-      width="100%",
-      overflow_y="auto",
-    ),
-    mode="sanitized"
-  )
+
   
 def chat_pane():
   state = me.state(State)
-  system_instructions = """
-<PERSONA_AND_GOAL>
-    -You are a helpful assistant knowledgeable about healthcare and specifically about the documentation as provided by the World Health Organization as Health Topics
-    -You are also able to translate from and to all the languages known to you. 
-    -You do not make up any information
-</PERSONA_AND_GOAL>
-
-<INSTRUCTIONS>
-    - The prompt will have a question about {topic} by a {role}
-    - Use the the <CONTEXT> to answer the question and if you cannot say "There is no such information withing the WHO Health Topics"
-    - Always mention the source of the article as a full url but mention each url only once
-    - Use the chat history to determine if the user wants information on a sub-topic. 
-<INSTRUCTIONS>
-
-<CONTEXT>
-{topic_context}
-</CONTEXT>
-
-<CONSTRAINTS>
-    - You cannot make up information
-    - You cannot answer non healthcare related questions
-</CONSTRAINTS>
-
-<OUTPUT_FORMAT>
- - If the prompt is another language answer in that language
- - If the user asks for a translation, give the translation
-/OUTPUT_FORMAT>
-  """.format(topic= state.topic,role= state.medical_role,topic_context= str(state.topic_context_list))
-  model = GenerativeModel(model_name,generation_config=GenerationConfig(max_output_tokens=8192, temperature=1, top_p=0.95,candidate_count=1),safety_settings=safety_settings,system_instruction=system_instructions)
+  model = GenerativeModel(model_name,generation_config=GenerationConfig(max_output_tokens=8192, temperature=1, top_p=0.95,candidate_count=1),safety_settings=safety_settings,system_instruction=system_instructions, tools=[tools])
   chat_session = model.start_chat()
-  if state.output:
+  if state.input:
     chat_session.send_message(state.output,stream=False)
-    state.output = ""
   with me.box(
     style=me.Style(
       display = "flex",
@@ -459,30 +331,6 @@ def icon_button(
 
 
 # Event Handlers
-def on_selection_change_topic(e: me.SelectSelectionChangeEvent):
-  state = me.state(State)
-  state.topic = e.value
-  topic_context_list = []
-  topic_context =  search_vectordb(db,state.topic,5)
-  for result in topic_context:
-    if str(result.metadata["title"]).strip() == state.topic and result.metadata["type"] == "topic":
-     state.topic_html = result.metadata["html"]
-    topic_context_list.append(result.page_content)
-  state.topic_context_list =  topic_context_list
-  state.example_query = ""
-
-def on_selection_change_role(e: me.SelectSelectionChangeEvent):
-  state = me.state(State)
-  state.medical_role = e.value
-  medical_role =  state.medical_role
-  state.example_query = ""
-
-def on_selection_change_example(e: me.SelectSelectionChangeEvent):
-  state = me.state(State)
-  state.example_query  = e.value
-  state.input = state.example_query
-  me.focus_component(key="chat_input")
-
 def on_chat_input(e: me.InputBlurEvent):
   """Capture chat text input on blur."""
   state = me.state(State)
@@ -494,10 +342,8 @@ def on_submit_chat_msg(e: me.TextareaShortcutEvent):
   yield
   yield from _submit_chat_msg()
 
-
 def on_click_submit_chat_msg(e: me.ClickEvent):
   yield from _submit_chat_msg()
-
 
 def _submit_chat_msg():
   state = me.state(State)
@@ -509,12 +355,6 @@ def _submit_chat_msg():
   yield
 
   start_time = time.time()
-  context = search_vectordb(db,input,1)
-  state.context = context[0].page_content
-  #full_input = f"{input}\n\n\{context[0].page_content}"
-  full_input = f"{input}"
-  output= full_input
-  state.output = output
   state.in_progress = False
   me.focus_component(key="chat_input")
   yield

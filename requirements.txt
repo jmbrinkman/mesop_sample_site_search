@@ -5,11 +5,4 @@ autopep8
 # App
 mesop
 google-cloud-aiplatform  
-chromadb 
-langchain-chroma
-langchain_google_community 
-langchain
-langchain-google-vertexai
-bs4 
-lxml
 gunicorn
