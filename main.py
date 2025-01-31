@@ -12,19 +12,8 @@ VERTEX_AI_SEARCH_LOCATION = "eu"  # @param {type:"string"}
 VERTEX_AI_SEARCH_APP_ID = "freebird_1737574726005"  # @param {type:"string"}
 # Set to your data store ID
 VERTEX_AI_SEARCH_DATASTORE_ID = "freebird_1737574778860_gcs_store"  # @param {type:"string"}
+page_title = "AIrplane"
 
-import requests
-
-project_id= requests.get("http://metadata/computeMetadata/v1/project/project-id", headers={'Metadata-Flavor': 'Google'}).text
-full_zone_string = requests.get("http://metadata/computeMetadata/v1/instance/zone", headers={'Metadata-Flavor': 'Google'}).text
-zone_name = full_zone_string.split("/")[3]
-region = zone_name[:-2]
-
-REGION = region
-PROJECT_ID = project_id
-location = 'us-central1'
-
-import requests
 import os
 import random
 import time
@@ -39,26 +28,79 @@ from vertexai.generative_models import (
     GenerativeModel,
     SafetySetting,
     Part,
-    Tool
-)  
+    Tool,
+    FunctionCall,
+    FunctionDeclaration
+)
+import vertexai.generative_models as generative_models
 
 import mesop as me
 import mesop.labs as mel
+from google.api_core.client_options import ClientOptions
+from google.cloud import discoveryengine_v1 as discoveryengine
 
-model_name = "gemini-1.5-flash"  
+model_name = "gemini-1.5-pro"  
 
-tools = [
-    Tool.from_retrieval(
-        retrieval=generative_models.grounding.Retrieval(
-            source=generative_models.grounding.VertexAISearch(
-                datastore=VERTEX_AI_SEARCH_DATASTORE_ID,
-                project=PROJECT_ID,
-                location=VERTEX_AI_SEARCH_LOCATION,
+def better_search(project_id: str, location: str, engine_id: str, search_query: str, instruction: str):
+    """
+    Search through documents with flight manuals to use as context when answering questions.
+    
+    
+    :param str instruction: the instruction for vertex ai search to find the right information 
+    :param str search_query: the user query or question, often the prompt
+    :param str engine_id: the type of search, unstructured 0, structured 1  or website 3. 
+    :param str location: the id of the vertex ai search AI datatstore, eu or global
+    :param str project_id: the project_id of the goolge project
+    """
+    content_search_spec = discoveryengine.SearchRequest.ContentSearchSpec(
+        extractive_content_spec=discoveryengine.SearchRequest.ContentSearchSpec.ExtractiveContentSpec(
+            max_extractive_answer_count=5
+        ),
+        snippet_spec=discoveryengine.SearchRequest.ContentSearchSpec.SnippetSpec(
+            return_snippet=False
+        ),
+        summary_spec=discoveryengine.SearchRequest.ContentSearchSpec.SummarySpec(
+            summary_result_count=10,
+            include_citations=False,
+            ignore_adversarial_query=True,
+            ignore_non_summary_seeking_query=False,
+            model_prompt_spec=discoveryengine.SearchRequest.ContentSearchSpec.SummarySpec.ModelPromptSpec(
+            preamble=instruction
+        ),
+        model_spec=discoveryengine.SearchRequest.ContentSearchSpec.SummarySpec.ModelSpec(
+            version="preview",
             ),
-            disable_attribution=False,
-        )
-    ),
-]
+        ),
+    )
+    client_options = (
+        ClientOptions(api_endpoint=f"{location}-discoveryengine.googleapis.com")
+        if location != "global"
+        else None
+    )
+    client = discoveryengine.SearchServiceClient(client_options=client_options)
+    serving_config = f"projects/{project_id}/locations/{location}/collections/default_collection/engines/{engine_id}/servingConfigs/default_config"
+
+    request = discoveryengine.SearchRequest(
+        serving_config=serving_config,
+        query=search_query,
+        page_size=100,
+        content_search_spec=content_search_spec,
+        query_expansion_spec=discoveryengine.SearchRequest.QueryExpansionSpec(
+            condition=discoveryengine.SearchRequest.QueryExpansionSpec.Condition.AUTO,
+        ),
+        spell_correction_spec=discoveryengine.SearchRequest.SpellCorrectionSpec(
+            mode=discoveryengine.SearchRequest.SpellCorrectionSpec.Mode.AUTO
+        ),
+    )
+    response = client.search(request)
+
+    return response
+
+better_search_func = generative_models.FunctionDeclaration.from_func(better_search)
+
+tools = [Tool(
+    function_declarations=[better_search_func],
+)]
 
 
 safety_settings = [
@@ -81,32 +123,19 @@ safety_settings = [
 ]
 
 vertexai.init(project=PROJECT_ID, location=LOCATION)
-embeddings = VertexAIEmbeddings(model_name="text-embedding-004")
-generation_config = GenerationConfig(max_output_tokens=8192, temperature=0.8, top_p=0.95)
+generation_config = GenerationConfig(max_output_tokens=8192, temperature=1, top_p=0.95)
 
 system_instructions = """
 <PERSONA_AND_GOAL>
-      You are a helpful assistant knowledgeable about PanAm airplanes
+      You are a helpful assistant knowledgeable about PanAm airplanes. You can use function calls to reach that goal.
 </PERSONA_AND_GOAL>
-
-<INSTRUCTIONS>
-- Always refer to the tool and Ground your answers in it
-- Understand the retrieved snippet by the tool and only use that information to help users
-- For supporting references, you can provide the Grounding tool snippets verbatim, and any other info like page number
-- For Information not available in the tool, mention you dont have access to the information.
-- Output "answer" should be I dont know when the user question is irrelevant or outside the <CONTEXT>
-- Leave "reference_snippet" as null if you are not sure about the page and text snippet
-<INSTRUCTIONS>
-
-<CONTEXT>
-  Grounding tool finds most relevant snippets from the Pan An operatin manuals data store.
-  Use the information provided by the tool as your knowledge base.
-</CONTEXT>
-
-<CONSTRAINTS>
-- ONLY use information available from the Grounding tool
-</CONSTRAINTS>
-"""
+<FUNCTION_CALL_PARAMETERS>
+    :param str search_query: the user query or question, often the prompt. Feel free to improve it
+    :param str engine_id: '0'
+    :param str location: 'global'
+    :param str project_id: {PROJECT_ID}
+</FUNCTION_CALL_PARAMETERS>
+""".format(PROJECT_ID = PROJECT_ID)
 
 
 @me.stateclass
@@ -114,6 +143,8 @@ class State:
   input: str
   in_progress: bool
   session : bool
+  output: str
+  debug: str
 
 def on_load(e: me.LoadEvent):
   me.set_theme_mode("dark")
@@ -167,16 +198,18 @@ def page():
         width="100%",
         )
       ):
-        me.text("Placeholder")
+        me.text(state.debug)
 
 
   
 def chat_pane():
   state = me.state(State)
-  model = GenerativeModel(model_name,generation_config=GenerationConfig(max_output_tokens=8192, temperature=1, top_p=0.95,candidate_count=1),safety_settings=safety_settings,system_instruction=system_instructions, tools=[tools])
+  model = GenerativeModel(model_name,generation_config=GenerationConfig(max_output_tokens=8192, temperature=0.9, top_p=0.95,candidate_count=1),safety_settings=safety_settings,system_instruction=system_instructions, tools=tools)
   chat_session = model.start_chat()
-  if state.input:
-    chat_session.send_message(state.output,stream=False)
+  if state.output:
+    answer = chat_session.send_message(state.output,stream=False)
+    state_debug = answer
+
   with me.box(
     style=me.Style(
       display = "flex",
@@ -192,9 +225,14 @@ def chat_pane():
         if role == "user":
           text = message.text.split('\n\n')
           user_message(text[0])
-        else:
-          text = message.parts[0].text
-          bot_message(str(text))
+        elif role == "model":
+          
+          if str(message.parts[0]) == "function_call":
+
+          #if message.parts[0] == "function_call":
+          #  text = message.parts[0].text
+          #  bot_message(str(text))
+
 
 
     #if state.in_progress:
@@ -355,6 +393,7 @@ def _submit_chat_msg():
   yield
 
   start_time = time.time()
+  state.output = input
   state.in_progress = False
   me.focus_component(key="chat_input")
   yield

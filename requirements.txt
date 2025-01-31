@@ -6,3 +6,4 @@ autopep8
 mesop
 google-cloud-aiplatform  
 gunicorn
+google-cloud-discoveryengine
