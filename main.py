@@ -142,9 +142,10 @@ system_instructions = """
 class State:
   input: str
   in_progress: bool
-  session : bool
+  chat_session : any
   output: str
   debug: str
+
 
 def on_load(e: me.LoadEvent):
   me.set_theme_mode("dark")
@@ -161,6 +162,7 @@ def on_load(e: me.LoadEvent):
 def page():
   state = me.state(State)
   with me.box(
+    key = "page_main",
     style=me.Style(
       background=me.theme_var("surface-container-lowest"),
       display="flex",
@@ -204,34 +206,34 @@ def page():
   
 def chat_pane():
   state = me.state(State)
-  model = GenerativeModel(model_name,generation_config=GenerationConfig(max_output_tokens=8192, temperature=0.9, top_p=0.95,candidate_count=1),safety_settings=safety_settings,system_instruction=system_instructions, tools=tools)
-  chat_session = model.start_chat()
-  if state.output:
-    answer = chat_session.send_message(state.output,stream=False)
-    state_debug = answer
+  if not state.chat_session:
+    model = GenerativeModel(model_name,generation_config=GenerationConfig(max_output_tokens=8192, temperature=0.9, top_p=0.95,candidate_count=1),safety_settings=safety_settings,system_instruction=system_instructions, tools=tools)
+    state.chat_session = model.start_chat()
 
+
+  #if state.output:
+  #  answer = chat_session.send_message(state.output,stream=False)
+  #  state_debug = answer
   with me.box(
+    key= "chat_pane_box",
     style=me.Style(
       display = "flex",
       flex_grow=1,
       overflow_y="auto",
       flex_direction= "column", 
-      justify_items= "flex-start"
+      justify_content= "flex-start",
       )
   ):
-    if not len(chat_session.history) == 0:
-      for message in chat_session.history:
+    for message in state.chat_session.history:
         role = message.role
         if role == "user":
-          text = message.text.split('\n\n')
-          user_message(text[0])
+          user_message(message.text)
         elif role == "model":
-          
-          if str(message.parts[0]) == "function_call":
-
+          if not message.parts[0].function_call:
+            
           #if message.parts[0] == "function_call":
-          #  text = message.parts[0].text
-          #  bot_message(str(text))
+            text = message.parts[0].text
+            bot_message(str(text))
 
 
 
@@ -240,6 +242,7 @@ def chat_pane():
       #  pass
     
 def user_message(text):
+  me.log(message=text)
   with me.box(
     style=me.Style(
       display="flex",
@@ -247,6 +250,7 @@ def user_message(text):
       justify_content="start",
       margin=me.Margin.all(20),
     )
+
   ):
     with me.box(
       style=me.Style(
@@ -259,10 +263,11 @@ def user_message(text):
     ):
       me.markdown(
         text,
-        style=me.Style(
-            color=me.theme_var("on-surface"),
-            text_align= "end"
-          ),
+            style=me.Style(
+                color=me.theme_var("on-surface"),
+                text_align="end",
+            ),
+
         )
     text_avatar(
       background=me.theme_var("secondary"),
@@ -273,6 +278,7 @@ def user_message(text):
 
 
 def bot_message(text):
+  me.log(message=text)
   with me.box(style=me.Style(display="flex", gap=15, margin=me.Margin.all(20))):
     text_avatar(
       background=me.theme_var("primary"),
@@ -286,6 +292,7 @@ def bot_message(text):
         text,
         style=me.Style(color=me.theme_var("on-surface")),
       )
+
 
 def chat_input():
   state = me.state(State)
@@ -393,6 +400,10 @@ def _submit_chat_msg():
   yield
 
   start_time = time.time()
+
+  answer = state.chat_session.send_message(state.input,stream=False)
+
+
   state.output = input
   state.in_progress = False
   me.focus_component(key="chat_input")
