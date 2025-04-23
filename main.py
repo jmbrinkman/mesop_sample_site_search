@@ -10,7 +10,7 @@ REGION = LOCATION
 # Keeping till I replace all the occurences
 MODEL = "gemini-1.5-flash"
 # This should be named heading and say something about the app
-EMPTY_CHAT_MESSAGE = "Please select a Health Topic and Medical Role"
+EMPTY_CHAT_MESSAGE = "Please select a Health Topic and Medical Role "
 
 
 import time
