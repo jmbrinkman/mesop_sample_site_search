@@ -1,5 +1,4 @@
-
-# I'm not getting into the discsusion about variabeles or constants. I'm changing this into variabeles and because in mesop anything outside of the pager is global I'll treat them as constants anyway
+# I'm not getting into the discussion about variables or constants. I'm changing this into variables and because in mesop anything outside of the pager is global I'll treat them as constants anyway
 BOT_AVATAR_LETTER = "A"
 USER_AVATAR_LETTER= "M"
 CHAT_MAX_WIDTH = "800px"
@@ -14,24 +13,15 @@ MODEL = "gemini-1.5-flash"
 EMPTY_CHAT_MESSAGE = "Please select a Health Topic and Medical Role"
 
 
-# Prune we once we are done
-import requests
-import os
-import random
 import time
-from dataclasses import asdict, dataclass
-from typing import Callable, Literal
-import base64
+from typing import Callable
 
-from bs4 import BeautifulSoup, SoupStrainer
 
 from langchain_google_vertexai import VertexAIEmbeddings
-from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.vectorstores import Chroma
 import vertexai
 from vertexai.generative_models import (
     GenerationConfig,
-    GenerationResponse,
     GenerativeModel,
     SafetySetting,
     Part,
@@ -39,7 +29,6 @@ from vertexai.generative_models import (
 
 import mesop as me
 import mesop.labs as mel
-
 # Could make model selector. But we are not trying to make this into AIStuido
 model_name = "gemini-1.5-flash"  
 
@@ -88,7 +77,7 @@ def simple_generate(prompt: str, candidate_count: int = 1):
     return responses.candidates
 
 # if the state becomes to ge the application is to slow. And all sorts of bad stuff happens if you use complicated datastructures.
-@me.stateclass
+@me.stateclass 
 class State:
   input: str
   topic: str 
@@ -146,7 +135,6 @@ def page():
         justify_items= "end"
         )
       ):
-        me.text("Placeholder")
       with me.box(
         style=me.Style(
         background=me.theme_var("surface-container-low"),
@@ -156,7 +144,11 @@ def page():
         width="30%",
         )
       ):
-        me.text("Placeholder")
+          overview_box()
+          topic_selector_box()
+          role_selector_box()
+          example_selector_box()
+      chat_pane()
 
 
 # Example to selector from a list with external data
