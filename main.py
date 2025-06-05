@@ -22,7 +22,7 @@ aiplatform.init(project=PROJECT_ID, location=REGION)
 endpoints["endpoint"] = aiplatform.Endpoint(
     endpoint_name=ENDPOINT_ID,
     project=PROJECT_ID,
-    location=ENDPOINT_REGION,
+    location=REGION,
 )
 
 
