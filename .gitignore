@@ -172,3 +172,4 @@ cython_debug/
 
 # IDX
 .vscode
+.idx
