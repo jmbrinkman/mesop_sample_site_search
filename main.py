@@ -73,7 +73,7 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
   prediction = response.predictions[0]
 
   for line in prediction.splitlines():
-    time.sleep(0.3)
+    time.sleep(0.2)
     yield line + " "
 
 
