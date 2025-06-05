@@ -4,6 +4,19 @@ from dataclasses import asdict, dataclass
 from typing import Callable, Literal
 
 import mesop as me
+PROJECT_ID= requests.get("http://metadata/computeMetadata/v1/project/project-id", headers={'Metadata-Flavor': 'Google'}).text
+REGION = ((requests.get("http://metadata/computeMetadata/v1/instance/zone", headers={'Metadata-Flavor': 'Google'}).text).split("/")[3])[:-2]
+ENDPOINT_ID = "3897387189931081728"  # @param {type: "string", placeholder:"e.g. 123456789"}
+
+# Initialize Vertex AI API.
+print("Initializing Vertex AI API.")
+aiplatform.init(project=PROJECT_ID, location=REGION)
+endpoints["endpoint"] = aiplatform.Endpoint(
+    endpoint_name=ENDPOINT_ID,
+    project=PROJECT_ID,
+    location=ENDPOINT_REGION,
+)
+
 
 Role = Literal["user", "bot"]
 
@@ -44,21 +57,22 @@ class State:
 
 
 def respond_to_chat(input: str, history: list[ChatMessage]):
-  """Displays random canned text.
-
-  Edit this function to process messages with a real chatbot/LLM.
-  """
-  lines = [
-    "Mesop is a Python-based UI framework designed to simplify web UI development for engineers without frontend experience.",
-    "It leverages the power of the Angular web framework and Angular Material components, allowing rapid construction of web demos and internal tools.",
-    "With Mesop, developers can enjoy a fast build-edit-refresh loop thanks to its hot reload feature, making UI tweaks and component integration seamless.",
-    "Deployment is straightforward, utilizing standard HTTP technologies.",
-    "Mesop's component library aims for comprehensive Angular Material component coverage, enhancing UI flexibility and composability.",
-    "It supports custom components for specific use cases, ensuring developers can extend its capabilities to fit their unique requirements.",
-    "Mesop's roadmap includes expanding its component library and simplifying the onboarding processs.",
+  system_instruction = "You are an medical proffesional"
+  formatted_prompt = f"{system_instruction} {input}"
+  instances = [
+    {
+        "prompt": formatted_prompt,
+        "max_tokens": 1000,
+        "temperature": 0,
+        "raw_response": raw_response,
+    },
   ]
+  response = endpoints["endpoint"].predict(
+      instances=instances, use_dedicated_endpoint=use_dedicated_endpoint
+  )
+  prediction = response.predictions[0]
 
-  for line in random.sample(lines, random.randint(3, len(lines) - 1)):
+  for line in prediction.splitlines():
     time.sleep(0.3)
     yield line + " "
 
@@ -72,7 +86,7 @@ def on_load(e: me.LoadEvent):
     allowed_iframe_parents=["https://mesop-dev.github.io"]
   ),
   title="Fancy Mesop Demo Chat",
-  path="/fancy_chat",
+  path="/",
   on_load=on_load,
 )
 def page():
