@@ -2,14 +2,22 @@ import random
 import time
 from dataclasses import asdict, dataclass
 from typing import Callable, Literal
+from google.cloud import aiplatform, storage
+
 
 import mesop as me
+import requests
+
+
+
+models, endpoints = {}, {}
+
 PROJECT_ID= requests.get("http://metadata/computeMetadata/v1/project/project-id", headers={'Metadata-Flavor': 'Google'}).text
 REGION = ((requests.get("http://metadata/computeMetadata/v1/instance/zone", headers={'Metadata-Flavor': 'Google'}).text).split("/")[3])[:-2]
 ENDPOINT_ID = "3897387189931081728"  # @param {type: "string", placeholder:"e.g. 123456789"}
 
 # Initialize Vertex AI API.
-print("Initializing Vertex AI API.")
+
 aiplatform.init(project=PROJECT_ID, location=REGION)
 endpoints["endpoint"] = aiplatform.Endpoint(
     endpoint_name=ENDPOINT_ID,
