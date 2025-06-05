@@ -72,7 +72,7 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
         "prompt": formatted_prompt,
         "max_tokens": 1000,
         "temperature": 0,
-        "raw_response": raw_response,
+        "raw_response": True,
     },
   ]
   response = endpoints["endpoint"].predict(
