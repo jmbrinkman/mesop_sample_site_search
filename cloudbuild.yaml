@@ -4,7 +4,7 @@
     args: ['build', '-t', 'europe-west4-docker.pkg.dev/$PROJECT_ID/cloud-run/mesop:$COMMIT_SHA', '.']
   # Push the container image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'europe-west4-docker.pkg.dev/$PROJECT_ID/cloud-run/mesop:search:$COMMIT_SHA']
+    args: ['push', 'europe-west4-docker.pkg.dev/$PROJECT_ID/cloud-run/mesop:$COMMIT_SHA']
   # Deploy container image to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
