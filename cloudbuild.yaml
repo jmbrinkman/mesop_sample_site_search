@@ -19,3 +19,5 @@
     - '--allow-unauthenticated'
   images:
   - 'europe-west4-docker.pkg.dev/$PROJECT_ID/cloud-run/mesop:$COMMIT_SHA'
+  options:
+    logging: CLOUD_LOGGING_ONLY
