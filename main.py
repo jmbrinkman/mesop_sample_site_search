@@ -67,6 +67,7 @@ class State:
 def respond_to_chat(input: str, history: list[ChatMessage]):
   system_instruction = "You are an medical proffesional"
   formatted_prompt = f"{system_instruction} {input}"
+  use_dedicated_endpoint = True
   instances = [
     {
         "prompt": formatted_prompt,
