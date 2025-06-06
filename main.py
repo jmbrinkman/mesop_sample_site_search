@@ -72,13 +72,16 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
   <USER_QUERY>
   {input}
   </USER_QUERY>
+  <CONSTRAINTS>
+  Answer in 400 tokens or less
+  </CONSTRAINS>
   """.format(input=input)
   formatted_prompt = f"{system_instruction} {input}"
   use_dedicated_endpoint = True
   instances = [
     {
         "prompt": formatted_prompt,
-        "max_tokens": 200,
+        "max_tokens": 450,
         "temperature": 0,
         "raw_response": True,
     },
