@@ -53,6 +53,7 @@ class ChatMessage:
   rating: int = 0
 
 
+
 @me.stateclass
 class State:
   input: str
@@ -62,6 +63,8 @@ class State:
   # Need to use dict instead of ChatMessage due to serialization bug.
   # See: https://github.com/mesop-dev/mesop/issues/659
   history: list[list[dict]]
+  files: list[me.UploadedFile]
+
 
 
 def respond_to_chat(input: str, history: list[ChatMessage]):
@@ -81,7 +84,7 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
   instances = [
     {
         "prompt": formatted_prompt,
-        "max_tokens": 450,
+        "max_tokens": 1000,
         "temperature": 0,
         "raw_response": True,
     },
@@ -101,7 +104,7 @@ def on_load(e: me.LoadEvent):
   security_policy=me.SecurityPolicy(
     allowed_iframe_parents=["https://mesop-dev.github.io"]
   ),
-  title="Fancy Mesop Demo Chat",
+  title="MedGemma",
   path="/",
   on_load=on_load,
 )
@@ -225,7 +228,23 @@ def header():
           style=me.Style(margin=me.Margin(bottom=0)),
           type="headline-6",
         )
+    with me.content_uploader(
+        accepted_file_types=["image/jpeg", "image/png"],
+        on_upload=handle_upload,
+        type="icon",
+        multiple=True,
+        style=me.Style(font_weight="bold"),
+      ):
+        me.icon("upload")
+        if state.files:
+          for file in state.files:
+            with me.box(style=me.Style(margin=me.Margin.all(10))):
+              me.text(f"File name: {file.name}")
+              me.text(f"File size: {file.size}")
+              me.text(f"File type: {file.mime_type}")
 
+              with me.box(style=me.Style(margin=me.Margin.all(10))):
+                me.image(src=_convert_contents_data_url(file))
     with me.box(style=me.Style(display="flex", gap=5)):
       icon_button(
         key="",
@@ -643,3 +662,12 @@ def _truncate_text(text, char_limit=100):
     return text
   truncated_text = text[:char_limit].rsplit(" ", 1)[0]
   return truncated_text.rstrip(".,!?;:") + "..."
+
+  def handle_upload(event: me.UploadEvent):
+    state = me.state(State)
+    state.files = event.files
+  
+  def _convert_contents_data_url(file: me.UploadedFile) -> str:
+    return (
+    f"data:{file.mime_type};base64,{base64.b64encode(file.getvalue()).decode()}"
+    )
