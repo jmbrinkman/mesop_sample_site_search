@@ -65,13 +65,20 @@ class State:
 
 
 def respond_to_chat(input: str, history: list[ChatMessage]):
-  system_instruction = "You are an medical proffesional"
+  system_instruction = """
+  <INSTRUCTIONS>
+  You are an medical proffesional that will answer medical questions based on the <USER_QUERY>
+  </INSTRUCTIONS>
+  <USER_QUERY>
+  {input}
+  </USER_QUERY>
+  """.format(input=input)
   formatted_prompt = f"{system_instruction} {input}"
   use_dedicated_endpoint = True
   instances = [
     {
         "prompt": formatted_prompt,
-        "max_tokens": 1000,
+        "max_tokens": 200,
         "temperature": 0,
         "raw_response": True,
     },
@@ -81,10 +88,7 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
   )
   prediction = response.predictions[0]
 
-  for line in prediction.splitlines():
-    time.sleep(0.3)
-    yield line + " "
-
+  return prediction
 
 def on_load(e: me.LoadEvent):
   me.set_theme_mode("system")
