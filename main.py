@@ -663,11 +663,9 @@ def _truncate_text(text, char_limit=100):
   truncated_text = text[:char_limit].rsplit(" ", 1)[0]
   return truncated_text.rstrip(".,!?;:") + "..."
 
-  def handle_upload(event: me.UploadEvent):
-    state = me.state(State)
-    state.files = event.files
+def handle_upload(event: me.UploadEvent):
+  state = me.state(State)
+  state.files = event.files
   
-  def _convert_contents_data_url(file: me.UploadedFile) -> str:
-    return (
-    f"data:{file.mime_type};base64,{base64.b64encode(file.getvalue()).decode()}"
-    )
+def _convert_contents_data_url(file: me.UploadedFile) -> str:
+  return (f"data:{file.mime_type};base64,{base64.b64encode(file.getvalue()).decode()}")
