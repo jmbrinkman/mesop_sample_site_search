@@ -474,7 +474,7 @@ def _submit_chat_msg():
   state.input = ""
   yield
 
-  start_time = time.time()
+  #start_time = time.time()
   context = search_vectordb(db,input,1)
   state.context = context[0].page_content
   #full_input = f"{input}\n\n\{context[0].page_content}"
