@@ -5,7 +5,7 @@ autopep8
 # App
 mesop
 google-cloud-aiplatform  
-chromadb 
+chromadb == 0.5.23
 langchain-chroma
 langchain_google_community 
 langchain
