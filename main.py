@@ -96,7 +96,6 @@ class State:
   output: str
   context: str
   topic_html: str
-  indicators: str
 
 def on_load(e: me.LoadEvent):
   me.set_theme_mode("dark")
@@ -438,8 +437,6 @@ def on_selection_change_topic(e: me.SelectSelectionChangeEvent):
      state.topic_html = result.metadata["html"]
     topic_context_list.append(result.page_content)
   state.topic_context_list =  topic_context_list
-  #indicators = simple_generate(f"List all the following links :\n\n{indicator_links_string} that semantically relate to the {state.topic} Only give the URL! Example: Topic: buruli-ulcer Url: https://www.who.int/data/gho/data/indicators/indicator-details/GHO/buruli-ulcer ",1)
-  state.indicators = indicator_links_string
   state.example_query = ""
 
 def on_selection_change_role(e: me.SelectSelectionChangeEvent):
