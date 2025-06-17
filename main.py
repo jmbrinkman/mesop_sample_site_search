@@ -11,16 +11,14 @@ EMPTY_CHAT_MESSAGE = "Please select a Health Topic and Medical Role"
 
 import requests
 import os
-import random
-import time
-from dataclasses import asdict, dataclass
-from typing import Callable, Literal
-import base64
+#from dataclasses import asdict, dataclass
+#from typing import Callable, Literal
+#import base64
 
-from bs4 import BeautifulSoup, SoupStrainer
+#from bs4 import BeautifulSoup, SoupStrainer
 
 from langchain_google_vertexai import VertexAIEmbeddings
-from langchain_community.document_loaders import WebBaseLoader
+#from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.vectorstores import Chroma
 import vertexai
 from vertexai.generative_models import (
