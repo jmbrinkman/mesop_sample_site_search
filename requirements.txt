@@ -8,6 +8,5 @@ google-cloud-aiplatform
 chromadb == 0.5.23
 langchain-chroma
 langchain_google_community 
-langchain
 langchain-google-vertexai
 gunicorn
