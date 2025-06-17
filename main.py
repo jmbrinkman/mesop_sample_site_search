@@ -11,7 +11,7 @@ EMPTY_CHAT_MESSAGE = "Please select a Health Topic and Medical Role"
 
 import requests
 import os
-#from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass
 #from typing import Callable, Literal
 #import base64
 
