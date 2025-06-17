@@ -10,6 +10,4 @@ langchain-chroma
 langchain_google_community 
 langchain
 langchain-google-vertexai
-bs4 
-lxml
 gunicorn
